@@ -13,7 +13,15 @@
     <configurations />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1a3451cd-7eb6-4be1-969f-186c6e3f6b57" name="Changes" comment="" />
+    <list default="true" id="1a3451cd-7eb6-4be1-969f-186c6e3f6b57" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/FaceTec/Services/EmbeddingFaceService.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/FaceTec/Util/YoloModel/w600k_mbf.onnx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.idea.FaceTec/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.FaceTec/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/FaceTec/FaceTec.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/FaceTec/FaceTec.csproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/FaceTec/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/FaceTec/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/FaceTec/Services/GetFaceService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/FaceTec/Services/GetFaceService.cs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -27,6 +35,7 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/FaceTec/Program.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/FaceTec/Services/EmbeddingFaceService.cs" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="McpProjectServerCommands">
     <commands />
@@ -34,97 +43,100 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0000000195684675" />
-      <entry key="S5" value="1.002697870341545" />
-      <entry key="S10" value="1.1440290538164901" />
-      <entry key="S30" value="3.084366498525744" />
-      <entry key="S60" value="5.080005438021608" />
-      <entry key="M2" value="6.712267776433563" />
-      <entry key="M5" value="8.419525598837406" />
-      <entry key="M10" value="14.929666986524456" />
-      <entry key="M15" value="26.639530148268136" />
-      <entry key="M30" value="63.131556658610585" />
-      <entry key="H1" value="106.23582445911063" />
-      <entry key="H2" value="140.2457660534885" />
-      <entry key="H4" value="161.75427810927496" />
-      <entry key="D1" value="182.50538758225244" />
-      <entry key="W1" value="186.35049460352195" />
+      <entry key="MS100" value="3.782344965067773E-10" />
+      <entry key="MS500" value="0.013150473952295846" />
+      <entry key="S2" value="0.5069961574433001" />
+      <entry key="S5" value="1.3923139663320756" />
+      <entry key="S10" value="2.0250751947134287" />
+      <entry key="S30" value="2.6264844085215993" />
+      <entry key="S60" value="2.8156828261419498" />
+      <entry key="M2" value="3.234796380329627" />
+      <entry key="M5" value="11.02078732812484" />
+      <entry key="M10" value="34.81628508689632" />
+      <entry key="M15" value="57.21521028887291" />
+      <entry key="M30" value="110.31214190557989" />
+      <entry key="H1" value="176.7194323224907" />
+      <entry key="H2" value="237.11178510651632" />
+      <entry key="H4" value="279.3493145484252" />
+      <entry key="D1" value="323.1257627181202" />
+      <entry key="W1" value="331.5644655600206" />
     </decayedCancelled>
     <decayedSelected>
-      <entry key="MS100" value="0.0" />
-      <entry key="MS500" value="0.0" />
-      <entry key="S2" value="0.0" />
-      <entry key="S5" value="6.380702559876722E-167" />
-      <entry key="S10" value="1.5691136273249936E-83" />
-      <entry key="S30" value="8.883289377361638E-28" />
-      <entry key="S60" value="9.566914633070415E-14" />
-      <entry key="M2" value="1.1716568816013848E-6" />
-      <entry key="M5" value="0.023834154740637437" />
-      <entry key="M10" value="0.678254070699905" />
-      <entry key="M15" value="2.085735186801196" />
-      <entry key="M30" value="6.4424405520622585" />
-      <entry key="H1" value="11.343544672238556" />
-      <entry key="H2" value="15.059625656839398" />
-      <entry key="H4" value="17.35413533951867" />
-      <entry key="D1" value="19.532424161142973" />
-      <entry key="W1" value="19.93252130641779" />
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0" />
+      <entry key="S2" value="1.0" />
+      <entry key="S5" value="1.0000000000000002" />
+      <entry key="S10" value="1.0000000217569873" />
+      <entry key="S30" value="1.00443431834766" />
+      <entry key="S60" value="1.0961411607134919" />
+      <entry key="M2" value="1.5118979468514597" />
+      <entry key="M5" value="3.698404426841211" />
+      <entry key="M10" value="7.931267546909158" />
+      <entry key="M15" value="11.272757187501128" />
+      <entry key="M30" value="18.28305398304953" />
+      <entry key="H1" value="26.31803638339599" />
+      <entry key="H2" value="33.296475649964506" />
+      <entry key="H4" value="38.05803983399122" />
+      <entry key="D1" value="42.91422393449785" />
+      <entry key="W1" value="43.84235190692466" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.302757508043667E-6" />
-      <entry key="MS500" value="0.06652313640333499" />
-      <entry key="S2" value="0.507859049565169" />
-      <entry key="S5" value="0.765260743949199" />
-      <entry key="S10" value="1.0160148428615903" />
-      <entry key="S30" value="3.032623052210894" />
-      <entry key="S60" value="5.049833726923388" />
-      <entry key="M2" value="6.695393495130978" />
-      <entry key="M5" value="8.435602421455545" />
-      <entry key="M10" value="15.5995019147764" />
-      <entry key="M15" value="28.713327367273425" />
-      <entry key="M30" value="69.55777900188387" />
-      <entry key="H1" value="117.5651712993431" />
-      <entry key="H2" value="155.2958979826239" />
-      <entry key="H4" value="179.1029115456601" />
-      <entry key="D1" value="202.03677362713844" />
-      <entry key="W1" value="206.28286440532494" />
+      <entry key="MS100" value="4.196774578902939E-10" />
+      <entry key="MS500" value="0.013783002094252258" />
+      <entry key="S2" value="0.6408855698008697" />
+      <entry key="S5" value="1.835476919946027" />
+      <entry key="S10" value="2.6896431604953266" />
+      <entry key="S30" value="3.5030766972405987" />
+      <entry key="S60" value="3.8439425368261984" />
+      <entry key="M2" value="4.707373948313017" />
+      <entry key="M5" value="14.686938094033774" />
+      <entry key="M10" value="42.71167689038904" />
+      <entry key="M15" value="68.45255413375419" />
+      <entry key="M30" value="128.56390882172695" />
+      <entry key="H1" value="203.01308405825054" />
+      <entry key="H2" value="270.392022691847" />
+      <entry key="H4" value="317.3978100087508" />
+      <entry key="D1" value="366.0381487767394" />
+      <entry key="W1" value="375.406548095628" />
     </decayedShown>
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 0,
-  "fromUser": false
-}]]></component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0,
+  &quot;fromUser&quot;: false
+}</component>
   <component name="ProjectId" id="3HkCPZolZ8XuJpRRb5RFu4AklAp" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    ".NET File.Program.executor": "Run",
-    ".NET Project.FaceTec.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "cidr.known.project.marker": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "master",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/home/extra/olimpio2/projetos",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;.NET File.Program.executor&quot;: &quot;Run&quot;,
+    &quot;.NET Project.FaceTec.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/extra/olimpio2/projetos&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected=".NET Project.FaceTec">
     <configuration name="FaceTec" type="DotNetProject" factoryName=".NET Project">
       <option name="EXE_PATH" value="" />
@@ -176,6 +188,9 @@
     <option name="version" value="3" />
   </component>
   <component name="UnityProjectConfiguration" hasMinimizedUI="false" />
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName=".env" />
+  </component>
   <component name="VcsManagerConfiguration">
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
   </component>
