@@ -156,6 +156,7 @@ public class GetFaceService : IDisposable
             int h = (int)(faces.At<float>(i, 3) * inverseScale);
             float confidence = faces.At<float>(i, 14);
 
+            /*
             var landmarks = new List<Point>();
             for (int lm = 0; lm < 5; lm++)
             {
@@ -163,6 +164,7 @@ public class GetFaceService : IDisposable
                 int ly = (int)(faces.At<float>(i, 4 + lm * 2 + 1) * inverseScale);
                 landmarks.Add(new Point(lx, ly));
             }
+            */
 
             result.Add(new DetectedFace
             {
@@ -171,7 +173,7 @@ public class GetFaceService : IDisposable
                 Width = w,
                 Height = h,
                 Confidence = confidence,
-                Landmarks = landmarks
+                // Landmarks = landmarks
             });
         }
 
