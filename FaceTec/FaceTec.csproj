@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -15,7 +15,19 @@
       <PackageReference Include="Emgu.CV.runtime.windows" Version="4.13.0.5924" />
       <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
       <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
+      <PackageReference Include="OpenCvSharp4.Extensions" Version="4.13.0.20260627" />
       <PackageReference Include="OpenCvSharp4.official.runtime.linux-x64" Version="4.13.0.20260627" />
+      <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
     </ItemGroup>
-    
+
+    <ItemGroup>
+        <None Include="face_detection_yunet_2023mar.onnx">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="public\test\face\" />
+    </ItemGroup>
+
 </Project>
