@@ -21,6 +21,8 @@ public class GetFaceService : IDisposable
     private bool isTested = false;
 
     private string isSamePerson = "";
+
+    private float score;
     /// <summary>
     /// Construtor do Serviço de Detecção de Faces.
     /// </summary>
@@ -106,28 +108,24 @@ public class GetFaceService : IDisposable
                 {
                     using var faceRecive = new Mat(frame, rect);
 
-                    float score = service.CompareFace(faceRecive, "../public/test/face/Face1.jpg");
-
+                    score = service.CompareFace(faceRecive, "../public/test/face/Face1.jpg");
+                    
+                    isTested = true;
+                    
                     if (score >= 0.4f)
                     {
                         isSamePerson = "sim";
+                        
                     }
                     else
                     {
                         isSamePerson = "não";
                     }
-
-                    Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
-
-                    isTested = true;
                 }
             }
+            
 
-            if (isSamePerson != "")
-            {
-                isTested = false;
-                isSamePerson = null;
-            }
+
             
 
 
@@ -139,7 +137,13 @@ public class GetFaceService : IDisposable
                 Cv2.Circle(frame, new Point(lx, ly), 2, Scalar.Yellow, -1, LineTypes.AntiAlias);
             }
         }
-
+        Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
+            
+        if (isSamePerson != "")
+        {
+            isTested = false;
+            isSamePerson = "";
+        }
         return frame;
     }
 
