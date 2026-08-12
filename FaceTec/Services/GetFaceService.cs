@@ -17,7 +17,10 @@ public class GetFaceService : IDisposable
     // Fator de escala para reduzir a imagem antes da inferência. 
     // Ex: 0.5f significa processar a imagem com metade da resolução, o que quadruplica a velocidade!
     private readonly float _scaleFactor = 0.5f;
-    
+
+    private bool isTested = false;
+
+    private string isSamePerson = "";
     /// <summary>
     /// Construtor do Serviço de Detecção de Faces.
     /// </summary>
@@ -97,21 +100,36 @@ public class GetFaceService : IDisposable
             );
 
             // Detecta se a confidencia é maior que 90, se sim, manda para comparação
-            if (confidence > 0.9f)
+            if (!isTested)
             {
-                using var faceRecive = new Mat(frame, rect);
-                
-                
-                
-                float score = service.CompareFace(faceRecive, "../public/test/face/Face1.jpg");
+                if (confidence > 0.9f)
+                {
+                    using var faceRecive = new Mat(frame, rect);
 
-                bool isSamePerson = score >= 0.4f;
+                    float score = service.CompareFace(faceRecive, "../public/test/face/Face1.jpg");
 
-                Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
-                
-                
+                    if (score >= 0.4f)
+                    {
+                        isSamePerson = "sim";
+                    }
+                    else
+                    {
+                        isSamePerson = "não";
+                    }
+
+                    Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
+
+                    isTested = true;
+                }
             }
-        
+
+            if (isSamePerson != "")
+            {
+                isTested = false;
+                isSamePerson = null;
+            }
+            
+
 
             // Desenhar os 5 landmarks (olho esq, olho dir, nariz, boca esq, boca dir)
             for (int lm = 0; lm < 5; lm++)
@@ -187,7 +205,8 @@ public class GetFaceService : IDisposable
     {
         if (_disposed)
             return;
-
+        
+        service.Dispose();
         _detector.Dispose();
         _disposed = true;
         GC.SuppressFinalize(this);
