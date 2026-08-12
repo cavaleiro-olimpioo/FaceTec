@@ -3,6 +3,7 @@ namespace FaceTec.Services;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Serviço responsável pela detecção de rostos utilizando a rede neural YuNet do OpenCV.
@@ -12,7 +13,10 @@ public class GetFaceService : IDisposable
 {
     private readonly FaceDetectorYN _detector;
     private bool _disposed;
-    private EmbeddingFaceService service;
+    private readonly string _modelPath;
+    private readonly EmbeddingFaceService _embeddingService;
+    private readonly FaceAlignmentService _alignmentService;
+    private readonly Dictionary<string, float[]> _referenceEmbeddingCache = new();
     
     // Fator de escala para reduzir a imagem antes da inferência. 
     // Ex: 0.5f significa processar a imagem com metade da resolução, o que quadruplica a velocidade!
@@ -31,11 +35,14 @@ public class GetFaceService : IDisposable
     /// <param name="height">Altura original do frame.</param>
     public GetFaceService(string modelPath, int width, int height)
     {
+        _modelPath = modelPath;
+
         // Calcula a nova resolução para o detector (menor, portanto mais rápido)
         int scaledWidth = (int)(width * _scaleFactor);
         int scaledHeight = (int)(height * _scaleFactor);
         
-        service = new EmbeddingFaceService();
+        _embeddingService = new EmbeddingFaceService();
+        _alignmentService = new FaceAlignmentService();
         
         // Instancia o detector YuNet com o tamanho reduzido
         _detector = FaceDetectorYN.Create(
@@ -59,41 +66,25 @@ public class GetFaceService : IDisposable
         if (_disposed)
             throw new ObjectDisposedException(nameof(GetFaceService));
 
-        // 1. Otimização: Reduzir a imagem para o tamanho esperado pelo detector
-        using var smallFrame = new Mat();
-        Cv2.Resize(frame, smallFrame, new Size(frame.Width * _scaleFactor, frame.Height * _scaleFactor));
-
-        // 2. Inferência (IA): Encontrar rostos na imagem pequena
-        using var faces = new Mat();
-        _detector.Detect(smallFrame, faces);
-
-        int rows = faces.Rows;
-        if (rows <= 0)
+        var detectedFaces = DetectFaces(frame);
+        if (detectedFaces.Count <= 0)
             return frame; // Nenhum rosto encontrado
 
-        // 3. Pós-processamento: Mapear resultados de volta para a resolução original e desenhar
-        float inverseScale = 1.0f / _scaleFactor;
-
-        for (int i = 0; i < rows; i++)
+        foreach (var detectedFace in detectedFaces)
         {
-            // Os valores retornados pelo detector [0-3] x,y,w,h e [4-13] landmarks estão na escala reduzida.
-            // Precisamos multiplicar pelo inverso da escala para voltar ao tamanho real.
-            int x = (int)(faces.At<float>(i, 0) * inverseScale);
-            int y = (int)(faces.At<float>(i, 1) * inverseScale);
-            int w = (int)(faces.At<float>(i, 2) * inverseScale);
-            int h = (int)(faces.At<float>(i, 3) * inverseScale);
-            float confidence = faces.At<float>(i, 14);
+            var rect = new Rect(detectedFace.X, detectedFace.Y, detectedFace.Width, detectedFace.Height);
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
 
             // Desenhar a bounding box (caixa) no frame original
-            var rect = new Rect(x, y, w, h);
             Cv2.Rectangle(frame, rect, Scalar.Lime, 2, LineTypes.AntiAlias);
             
             
             // Escrever a porcentagem de confiança
             Cv2.PutText(
                 frame,
-                $"{confidence:0.00}",
-                new Point(x, y - 5),
+                $"{detectedFace.Confidence:0.00}",
+                new Point(rect.X, rect.Y - 5),
                 HersheyFonts.HersheySimplex,
                 0.5,
                 Scalar.Lime,
@@ -104,40 +95,48 @@ public class GetFaceService : IDisposable
             // Detecta se a confidencia é maior que 90, se sim, manda para comparação
             if (!isTested)
             {
-                if (confidence > 0.9f)
+                if (detectedFace.Confidence > 0.9f)
                 {
-                    using var faceRecive = new Mat(frame, rect);
+                    string referenceFacePath = Path.Combine(
+                        AppContext.BaseDirectory,
+                        "public",
+                        "test",
+                        "face",
+                        "Face1.jpg"
+                    );
 
-                    score = service.CompareFace(faceRecive, "../public/test/face/Face1.jpg");
-                    
-                    isTested = true;
-                    
-                    if (score >= 0.4f)
+                    try
                     {
-                        isSamePerson = "sim";
+                        using var alignedReceivedFace = _alignmentService.Align(frame, detectedFace.Landmarks);
+                        var receivedEmbedding = _embeddingService.GetEmbedding(alignedReceivedFace);
+                        var referenceEmbedding = GetReferenceEmbedding(referenceFacePath);
+
+                        score = _embeddingService.CompareEmbeddings(receivedEmbedding, referenceEmbedding);
+                        isSamePerson = score >= 0.4f ? "sim" : "não";
                         
+                        isTested = true;
+                        Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        isSamePerson = "não";
+                        Console.Error.WriteLine($"Erro ao comparar rosto: {ex.Message}");
                     }
                 }
             }
             
-
-
-            
-
-
             // Desenhar os 5 landmarks (olho esq, olho dir, nariz, boca esq, boca dir)
-            for (int lm = 0; lm < 5; lm++)
+            foreach (var landmark in detectedFace.Landmarks)
             {
-                int lx = (int)(faces.At<float>(i, 4 + lm * 2) * inverseScale);
-                int ly = (int)(faces.At<float>(i, 4 + lm * 2 + 1) * inverseScale);
-                Cv2.Circle(frame, new Point(lx, ly), 2, Scalar.Yellow, -1, LineTypes.AntiAlias);
+                Cv2.Circle(
+                    frame,
+                    new Point((int)landmark.X, (int)landmark.Y),
+                    2,
+                    Scalar.Yellow,
+                    -1,
+                    LineTypes.AntiAlias
+                );
             }
         }
-        Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
             
         if (isSamePerson != "")
         {
@@ -145,6 +144,56 @@ public class GetFaceService : IDisposable
             isSamePerson = "";
         }
         return frame;
+    }
+
+    private static Rect ClampRectToFrame(Rect rect, Mat frame)
+    {
+        int x = Math.Clamp(rect.X, 0, frame.Width);
+        int y = Math.Clamp(rect.Y, 0, frame.Height);
+        int right = Math.Clamp(rect.X + rect.Width, 0, frame.Width);
+        int bottom = Math.Clamp(rect.Y + rect.Height, 0, frame.Height);
+
+        return new Rect(x, y, right - x, bottom - y);
+    }
+
+    /// <summary>
+    /// Carrega, detecta, alinha e gera o embedding de uma imagem de referência.
+    /// </summary>
+    /// <remarks>
+    /// A imagem salva no banco precisa passar pelo mesmo pipeline do frame ao vivo.
+    /// Comparar um rosto ao vivo alinhado contra uma referência crua reintroduz variação
+    /// de rotação, escala e posição, anulando o ganho do alinhamento ArcFace.
+    /// O resultado é cacheado por caminho absoluto para não repetir inferências a cada frame.
+    /// </remarks>
+    /// <param name="referenceFacePath">Caminho da imagem de referência no disco.</param>
+    /// <returns>Embedding normalizado da referência alinhada.</returns>
+    /// <exception cref="FileNotFoundException">Lançada quando a imagem não existe.</exception>
+    /// <exception cref="InvalidOperationException">Lançada quando a imagem não pode ser carregada ou não possui rosto detectável.</exception>
+    private float[] GetReferenceEmbedding(string referenceFacePath)
+    {
+        string fullPath = Path.GetFullPath(referenceFacePath);
+        if (_referenceEmbeddingCache.TryGetValue(fullPath, out var cachedEmbedding))
+            return cachedEmbedding;
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException("Imagem de referência não encontrada.", fullPath);
+
+        using var referenceImage = Cv2.ImRead(fullPath, ImreadModes.Color);
+        if (referenceImage.Empty())
+            throw new InvalidOperationException($"Não foi possível carregar a imagem de referência: {fullPath}");
+
+        var referenceFace = DetectFacesInImage(referenceImage)
+            .OrderByDescending(face => face.Confidence)
+            .FirstOrDefault();
+
+        if (referenceFace is null)
+            throw new InvalidOperationException($"Nenhum rosto foi detectado na imagem de referência: {fullPath}");
+
+        using var alignedReferenceFace = _alignmentService.Align(referenceImage, referenceFace.Landmarks);
+        var embedding = _embeddingService.GetEmbedding(alignedReferenceFace);
+        _referenceEmbeddingCache[fullPath] = embedding;
+
+        return embedding;
     }
 
     /// <summary>
@@ -177,29 +226,88 @@ public class GetFaceService : IDisposable
             int w = (int)(faces.At<float>(i, 2) * inverseScale);
             int h = (int)(faces.At<float>(i, 3) * inverseScale);
             float confidence = faces.At<float>(i, 14);
+            var rect = ClampRectToFrame(new Rect(x, y, w, h), frame);
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
 
-            /*
-            var landmarks = new List<Point>();
-            for (int lm = 0; lm < 5; lm++)
-            {
-                int lx = (int)(faces.At<float>(i, 4 + lm * 2) * inverseScale);
-                int ly = (int)(faces.At<float>(i, 4 + lm * 2 + 1) * inverseScale);
-                landmarks.Add(new Point(lx, ly));
-            }
-            */
+            var landmarks = ExtractLandmarks(faces, i, inverseScale);
 
             result.Add(new DetectedFace
             {
-                X = x,
-                Y = y,
-                Width = w,
-                Height = h,
+                X = rect.X,
+                Y = rect.Y,
+                Width = rect.Width,
+                Height = rect.Height,
                 Confidence = confidence,
-                // Landmarks = landmarks
+                Landmarks = landmarks
             });
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Detecta rostos em uma imagem de referência usando o tamanho original da imagem.
+    /// </summary>
+    /// <remarks>
+    /// O detector principal é configurado para o stream ao vivo reduzido. Como o pacote atual
+    /// do OpenCvSharp não expõe SetInputSize para reutilizar esse detector com outro tamanho,
+    /// criamos um detector temporário apenas quando uma referência ainda não está no cache.
+    /// Isso mantém o custo fora do caminho crítico por frame.
+    /// </remarks>
+    /// <param name="image">Imagem de referência carregada do disco.</param>
+    /// <returns>Lista de rostos detectados com landmarks na escala original da imagem.</returns>
+    private List<DetectedFace> DetectFacesInImage(Mat image)
+    {
+        using var detector = FaceDetectorYN.Create(
+            model: _modelPath,
+            config: "",
+            inputSize: new Size(image.Width, image.Height),
+            scoreThreshold: 0.8f,
+            nmsThreshold: 0.3f,
+            topK: 5000
+        );
+
+        using var faces = new Mat();
+        detector.Detect(image, faces);
+
+        var result = new List<DetectedFace>();
+        int rows = faces.Rows;
+        for (int i = 0; i < rows; i++)
+        {
+            int x = (int)faces.At<float>(i, 0);
+            int y = (int)faces.At<float>(i, 1);
+            int w = (int)faces.At<float>(i, 2);
+            int h = (int)faces.At<float>(i, 3);
+            var rect = ClampRectToFrame(new Rect(x, y, w, h), image);
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
+
+            result.Add(new DetectedFace
+            {
+                X = rect.X,
+                Y = rect.Y,
+                Width = rect.Width,
+                Height = rect.Height,
+                Confidence = faces.At<float>(i, 14),
+                Landmarks = ExtractLandmarks(faces, i, 1.0f)
+            });
+        }
+
+        return result;
+    }
+
+    private static List<Point2f> ExtractLandmarks(Mat faces, int row, float scale)
+    {
+        var landmarks = new List<Point2f>(5);
+        for (int lm = 0; lm < 5; lm++)
+        {
+            float lx = faces.At<float>(row, 4 + lm * 2) * scale;
+            float ly = faces.At<float>(row, 4 + lm * 2 + 1) * scale;
+            landmarks.Add(new Point2f(lx, ly));
+        }
+
+        return landmarks;
     }
 
     /// <summary>
@@ -210,7 +318,7 @@ public class GetFaceService : IDisposable
         if (_disposed)
             return;
         
-        service.Dispose();
+        _embeddingService.Dispose();
         _detector.Dispose();
         _disposed = true;
         GC.SuppressFinalize(this);
@@ -222,10 +330,37 @@ public class GetFaceService : IDisposable
 /// </summary>
 public class DetectedFace
 {
+    /// <summary>
+    /// Coordenada X da bounding box do rosto na imagem original.
+    /// </summary>
     public int X { get; set; }
+
+    /// <summary>
+    /// Coordenada Y da bounding box do rosto na imagem original.
+    /// </summary>
     public int Y { get; set; }
+
+    /// <summary>
+    /// Largura da bounding box do rosto.
+    /// </summary>
     public int Width { get; set; }
+
+    /// <summary>
+    /// Altura da bounding box do rosto.
+    /// </summary>
     public int Height { get; set; }
+
+    /// <summary>
+    /// Confiança retornada pelo YuNet para a detecção.
+    /// </summary>
     public float Confidence { get; set; }
-    public List<Point> Landmarks { get; set; } = new();
+
+    /// <summary>
+    /// Landmarks na ordem ArcFace: olho esquerdo, olho direito, nariz, boca esquerda e boca direita.
+    /// </summary>
+    /// <remarks>
+    /// Esses pontos são preservados na escala da imagem original para que o alinhamento seja aplicado
+    /// no frame cheio, não na versão reduzida usada apenas para acelerar a detecção.
+    /// </remarks>
+    public List<Point2f> Landmarks { get; set; } = new();
 }

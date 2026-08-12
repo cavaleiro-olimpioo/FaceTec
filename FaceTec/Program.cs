@@ -1,8 +1,8 @@
 using OpenCvSharp;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using DotNetEnv;
 using FaceTec.Services;
-using System.Threading.Tasks;
 
 // 1. Carrega as variáveis de ambiente do arquivo .env
 string envPath = Path.GetFullPath(
@@ -20,6 +20,12 @@ int frameSize = width * height * 3; // 3 canais (BGR)
 
 // Caminho para o modelo YuNet atualizado
 string modelPath = Path.Combine(AppContext.BaseDirectory, "face_detection_yunet_2023mar.onnx");
+if (!File.Exists(modelPath))
+    throw new FileNotFoundException("Modelo YuNet não encontrado.", modelPath);
+
+// FACETEC_SHOW_WINDOW=true/false força o comportamento.
+// Sem configuração explícita, abre janela quando houver sessão gráfica disponível.
+bool showWindow = ShouldShowWindow();
 
 // 3. Inicializa o serviço de detecção de rostos (já otimizado internamente)
 using var faceService = new GetFaceService(modelPath, width, height);
@@ -38,6 +44,11 @@ var psi = new ProcessStartInfo
 using var process = Process.Start(psi)
                     ?? throw new Exception("Não foi possível iniciar o ffmpeg");
 
+process.ErrorDataReceived += (_, e) =>
+{
+    if (!string.IsNullOrWhiteSpace(e.Data))
+        Console.Error.WriteLine($"ffmpeg: {RedactSensitiveUrls(e.Data)}");
+};
 process.BeginErrorReadLine();
 var stdout = process.StandardOutput.BaseStream;
 
@@ -80,6 +91,14 @@ var readTask = Task.Run(() =>
 // 6. THREAD PRINCIPAL (Processamento e Exibição)
 byte[] processBuffer = new byte[frameSize];
 
+
+// Configuração da janela
+float targetRatio = 10f / 16f;
+int cropWidth = (int)(height * targetRatio);
+int cropX = (width - cropWidth) / 2; // Centraliza horizontalmente
+
+var displayRect = new Rect(cropX, 0, cropWidth, height);
+
 while (isRunning)
 {
     bool hasNewFrame = false;
@@ -95,6 +114,12 @@ while (isRunning)
         }
     }
 
+    if (!hasNewFrame && readTask.IsCompleted)
+    {
+        isRunning = false;
+        break;
+    }
+
     if (hasNewFrame)
     {
         // Converte os bytes puros para o formato Mat do OpenCV
@@ -103,12 +128,15 @@ while (isRunning)
         // Encontra rostos e desenha no próprio frame (Otimizado com Downscale internamente)
         var processed = faceService.DrawFaces(frame);
 
+        using var displayFrame = new Mat(processed, displayRect);
+        
         // Exibe a janela
-        Cv2.ImShow("Câmera", processed);
+        if (showWindow)
+            Cv2.ImShow("Câmera", displayFrame);
     }
 
     // Pressione 'q' para sair
-    if (Cv2.WaitKey(1) == 'q')
+    if (showWindow && Cv2.WaitKey(1) == 'q')
     {
         isRunning = false;
         break;
@@ -116,6 +144,28 @@ while (isRunning)
 }
 
 // 7. Encerramento seguro
-process.Kill();
+if (!process.HasExited)
+    process.Kill();
 readTask.Wait(1000); // Aguarda a thread de leitura fechar
-Cv2.DestroyAllWindows();
+if (showWindow)
+    Cv2.DestroyAllWindows();
+
+static bool ShouldShowWindow()
+{
+    string? configuredValue = Environment.GetEnvironmentVariable("FACETEC_SHOW_WINDOW");
+    if (bool.TryParse(configuredValue, out bool configured))
+        return configured;
+
+    return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY"))
+           || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+}
+
+static string RedactSensitiveUrls(string message)
+{
+    return Regex.Replace(
+        message,
+        @"rtsp://[^'""\s]+",
+        "rtsp://<redacted>",
+        RegexOptions.IgnoreCase
+    );
+}

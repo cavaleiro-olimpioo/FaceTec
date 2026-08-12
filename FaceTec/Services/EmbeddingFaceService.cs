@@ -13,16 +13,18 @@ namespace FaceTec.Services;
 /// A versão 4.x do ImageSharp exige uma licença Six Labors no build, então ela foi
 /// removida do projeto. Se o pacote voltar a ser adicionado futuramente, será preciso
 /// configurar uma licença válida conforme os termos da Six Labors.
+/// O arquivo <c>Util/YoloModel/w600k_mbf.onnx</c> é copiado para a pasta de saída
+/// pelo projeto e carregado a partir de <see cref="AppContext.BaseDirectory"/>.
+/// O nome da entrada do tensor é lido do metadata do ONNX para evitar acoplamento
+/// com nomes específicos exportados pelo modelo.
 /// </remarks>
 public class EmbeddingFaceService : IDisposable
 {
-    private const int InputWidth = 112;
-    private const int InputHeight = 112;
     private const int EmbeddingSize = 512;
-    private const string InputName = "input";
+    private const string EmbeddingModelFileName = "w600k_mbf.onnx";
 
     private readonly InferenceSession _session;
-    private readonly string _modelPath = "../Util/YoloModel/w600k_mbf.onnx";
+    private readonly string _inputName;
 
     public EmbeddingFaceService()
     {
@@ -30,62 +32,50 @@ public class EmbeddingFaceService : IDisposable
         // Opcional: habilitar GPU se tiver ONNX Runtime com CUDA
         // sessionOptions.AppendExecutionProvider_CUDA(0);
 
-        _session = new InferenceSession(_modelPath, sessionOptions);
+        string modelPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Util",
+            "YoloModel",
+            EmbeddingModelFileName
+        );
+
+        if (!File.Exists(modelPath))
+            throw new FileNotFoundException("Modelo de embedding facial não encontrado.", modelPath);
+
+        _session = new InferenceSession(modelPath, sessionOptions);
+        _inputName = _session.InputMetadata.Keys.First();
     }
 
     /// <summary>
-    /// Compara o rosto recortado (Mat) com um rosto do banco (caminho da imagem).
-    /// Retorna similaridade de cosseno (0..1, quanto maior, mais parecido).
+    /// Gera o embedding de uma imagem de rosto já alinhada no padrão ArcFace.
     /// </summary>
-    /// <param name="receivedFace">Rosto detectado no frame, normalmente em BGR.</param>
-    /// <param name="storedFacePath">Caminho da imagem de referência salva no disco.</param>
-    /// <returns>Similaridade de cosseno entre os embeddings normalizados.</returns>
-    /// <exception cref="ArgumentException">Lançada quando o rosto recebido está vazio.</exception>
-    /// <exception cref="FileNotFoundException">Lançada quando a imagem de referência não existe.</exception>
-    /// <exception cref="InvalidOperationException">Lançada quando a imagem de referência não pode ser carregada.</exception>
-    public float CompareFace(Mat receivedFace, string storedFacePath)
-    {
-        if (receivedFace.Empty())
-            throw new ArgumentException("A imagem do rosto recebido está vazia.", nameof(receivedFace));
-
-        if (!File.Exists(storedFacePath))
-            throw new FileNotFoundException("Imagem de referência não encontrada.", storedFacePath);
-
-        using var storedFace = Cv2.ImRead(storedFacePath, ImreadModes.Color);
-        if (storedFace.Empty())
-            throw new InvalidOperationException($"Não foi possível carregar a imagem de referência: {storedFacePath}");
-
-        var embUser = GetEmbedding(receivedFace);
-        var embBd = GetEmbedding(storedFace);
-
-        return CosineSimilarity(embUser, embBd);
-    }
-
-    /// <summary>
-    /// Gera o embedding de uma imagem de rosto já recortada e, idealmente, alinhada.
-    /// </summary>
-    /// <param name="faceImage">Imagem do rosto em formato OpenCV Mat.</param>
+    /// <remarks>
+    /// O modelo w600k_mbf espera rostos alinhados em 112x112. O método ainda redimensiona
+    /// a imagem por tolerância operacional, mas a correção geométrica deve acontecer antes,
+    /// no serviço de alinhamento, para que a comparação por cosseno tenha poder discriminativo.
+    /// </remarks>
+    /// <param name="alignedFace">Rosto alinhado em formato OpenCV Mat.</param>
     /// <returns>Vetor de embedding L2-normalizado.</returns>
     /// <exception cref="ArgumentException">Lançada quando a imagem está vazia.</exception>
-    public float[] GetEmbedding(Mat faceImage)
+    public float[] GetEmbedding(Mat alignedFace)
     {
-        if (faceImage.Empty())
-            throw new ArgumentException("A imagem do rosto está vazia.", nameof(faceImage));
+        if (alignedFace.Empty())
+            throw new ArgumentException("A imagem do rosto alinhado está vazia.", nameof(alignedFace));
 
-        using var bgrFace = EnsureBgr(faceImage);
+        using var bgrFace = EnsureBgr(alignedFace);
         using var resized = new Mat();
-        Cv2.Resize(bgrFace, resized, new Size(InputWidth, InputHeight));
+        Cv2.Resize(bgrFace, resized, new Size(FaceAlignmentService.AlignedWidth, FaceAlignmentService.AlignedHeight));
 
         // MobileFaceNet recebe tensor NCHW [1, 3, 112, 112].
-        var tensor = new float[1 * 3 * InputHeight * InputWidth];
-        int channelSize = InputHeight * InputWidth;
+        var tensor = new float[1 * 3 * FaceAlignmentService.AlignedHeight * FaceAlignmentService.AlignedWidth];
+        int channelSize = FaceAlignmentService.AlignedHeight * FaceAlignmentService.AlignedWidth;
 
-        for (int y = 0; y < InputHeight; y++)
+        for (int y = 0; y < FaceAlignmentService.AlignedHeight; y++)
         {
-            for (int x = 0; x < InputWidth; x++)
+            for (int x = 0; x < FaceAlignmentService.AlignedWidth; x++)
             {
                 Vec3b pixel = resized.At<Vec3b>(y, x);
-                int offset = y * InputWidth + x;
+                int offset = y * FaceAlignmentService.AlignedWidth + x;
 
                 // OpenCV trabalha com BGR; o modelo recebe RGB normalizado em [-1, 1].
                 tensor[offset] = NormalizePixel(pixel.Item2);
@@ -94,10 +84,13 @@ public class EmbeddingFaceService : IDisposable
             }
         }
 
-        var inputTensor = new DenseTensor<float>(tensor, new[] { 1, 3, InputHeight, InputWidth });
+        var inputTensor = new DenseTensor<float>(
+            tensor,
+            new[] { 1, 3, FaceAlignmentService.AlignedHeight, FaceAlignmentService.AlignedWidth }
+        );
         var inputs = new List<NamedOnnxValue>
         {
-            NamedOnnxValue.CreateFromTensor(InputName, inputTensor)
+            NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
         };
 
         using var results = _session.Run(inputs);
@@ -109,6 +102,26 @@ public class EmbeddingFaceService : IDisposable
         Normalize(embedding);
 
         return embedding;
+    }
+
+    /// <summary>
+    /// Compara dois embeddings já normalizados por similaridade de cosseno.
+    /// </summary>
+    /// <remarks>
+    /// Separar a comparação do carregamento da imagem permite cachear embeddings de referência.
+    /// Assim, o rosto salvo no banco passa uma única vez pelo pipeline detecção-alinhamento-embedding
+    /// e não precisa ser recalculado a cada frame da câmera.
+    /// </remarks>
+    /// <param name="receivedEmbedding">Embedding do rosto capturado ao vivo.</param>
+    /// <param name="referenceEmbedding">Embedding do rosto de referência.</param>
+    /// <returns>Similaridade de cosseno entre -1 e 1.</returns>
+    /// <exception cref="ArgumentException">Lançada quando os vetores têm tamanhos diferentes.</exception>
+    public float CompareEmbeddings(float[] receivedEmbedding, float[] referenceEmbedding)
+    {
+        if (receivedEmbedding.Length != referenceEmbedding.Length)
+            throw new ArgumentException("Os embeddings comparados precisam ter o mesmo tamanho.");
+
+        return CosineSimilarity(receivedEmbedding, referenceEmbedding);
     }
 
     private static float NormalizePixel(byte value)
