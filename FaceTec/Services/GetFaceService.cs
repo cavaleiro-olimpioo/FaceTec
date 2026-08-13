@@ -124,6 +124,8 @@ public class GetFaceService : IDisposable
                 }
             }
             
+            // Criar função depois
+            
             // Desenhar os 5 landmarks (olho esq, olho dir, nariz, boca esq, boca dir)
             foreach (var landmark in detectedFace.Landmarks)
             {
@@ -364,3 +366,5 @@ public class DetectedFace
     /// </remarks>
     public List<Point2f> Landmarks { get; set; } = new();
 }
+
+
