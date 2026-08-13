@@ -367,6 +367,8 @@ public sealed class GetFaceService : IDisposable
             
             _isComparing = true;
             
+            using var frameCopy = frame.Clone();
+            
             int count = 1;
             while (true)
             {
@@ -393,7 +395,7 @@ public sealed class GetFaceService : IDisposable
                     
                     try
                     {
-                        using var alignedReceivedFace = _alignmentService.Align(frame, detectedFace.Landmarks);
+                        using var alignedReceivedFace = _alignmentService.Align(frameCopy, detectedFace.Landmarks);
                         var receivedEmbedding = _embeddingService.GetEmbedding(alignedReceivedFace);
                         var referenceEmbedding = GetReferenceEmbedding("student.jpg");
 
