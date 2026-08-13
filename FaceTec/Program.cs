@@ -6,7 +6,7 @@ using FaceTec.Services;
 
 // 1. Carrega as variáveis de ambiente do arquivo .env
 string envPath = Path.GetFullPath(
-    Path.Combine(AppContext.BaseDirectory, "../../../../.env")
+    Path.Combine(AppContext.BaseDirectory, "../../../../.env/.env")
 );
 Env.Load(envPath);
 

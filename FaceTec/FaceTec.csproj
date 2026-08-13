@@ -10,9 +10,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Dapper" Version="2.1.79" />
       <PackageReference Include="DotNetEnv" Version="3.2.0" />
       <PackageReference Include="Emgu.CV" Version="4.13.0.5924" />
       <PackageReference Include="Emgu.CV.runtime.windows" Version="4.13.0.5924" />
+      <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
       <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
       <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
       <PackageReference Include="OpenCvSharp4.Extensions" Version="4.13.0.20260627" />
@@ -29,6 +31,10 @@
         <None Include="public/test/face/*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Repositories\" />
     </ItemGroup>
 
 </Project>
