@@ -1,3 +1,6 @@
+using FaceTec.Repositories;
+using FaceTec.Util.dataModel;
+
 namespace FaceTec.Services;
 
 using OpenCvSharp;
@@ -5,56 +8,100 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+
 /// <summary>
 /// Serviço responsável pela detecção de rostos utilizando a rede neural YuNet do OpenCV.
 /// Otimizado com downscale de imagem para máxima performance.
 /// </summary>
-public class GetFaceService : IDisposable
+
+public sealed class GetFaceService : IDisposable
 {
+    private readonly GetStudentData _getStudentData;
+
     private readonly FaceDetectorYN _detector;
-    private bool _disposed;
     private readonly string _modelPath;
     private readonly EmbeddingFaceService _embeddingService;
     private readonly FaceAlignmentService _alignmentService;
+
     private readonly Dictionary<string, float[]> _referenceEmbeddingCache = new();
-    
-    // Fator de escala para reduzir a imagem antes da inferência. 
-    // Ex: 0.5f significa processar a imagem com metade da resolução, o que quadruplica a velocidade!
+
+    // Fator de escala para reduzir a imagem antes da inferência.
+    // 0.5f significa processar a imagem com metade da resolução.
     private readonly float _scaleFactor = 0.5f;
 
-    private bool isTested = false;
+    private bool _disposed;
+    private bool _isTested;
+    private string _isSamePerson = string.Empty;
+    private float _score;
+    string connectionString =
+        "Server=localhost,1433;" +
+        "Database=facetec_test;" +
+        "User Id=admin;" +
+        "Password=admin123;" +
+        "TrustServerCertificate=True;";
 
-    private string isSamePerson = "";
-
-    private float score;
     /// <summary>
-    /// Construtor do Serviço de Detecção de Faces.
+    /// Construtor do serviço de detecção de faces.
     /// </summary>
-    /// <param name="modelPath">Caminho para o arquivo .onnx do modelo YuNet.</param>
-    /// <param name="width">Largura original do frame.</param>
-    /// <param name="height">Altura original do frame.</param>
-    public GetFaceService(string modelPath, int width, int height)
+    /// <param name="modelPath">
+    /// Caminho para o arquivo .onnx do modelo YuNet.
+    /// </param>
+    /// <param name="width">
+    /// Largura original do frame.
+    /// </param>
+    /// <param name="height">
+    /// Altura original do frame.
+    /// </param>
+    /// <param name="connectionString">
+    /// String de conexão com o banco de dados.
+    /// </param>
+    public GetFaceService(
+        string modelPath,
+        int width,
+        int height,
+        string connectionString)
     {
+        if (string.IsNullOrWhiteSpace(modelPath))
+        {
+            throw new ArgumentException(
+                "O caminho do modelo não pode ser vazio.",
+                nameof(modelPath));
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new ArgumentException(
+                "A connection string não pode ser vazia.",
+                nameof(connectionString));
+        }
+
         _modelPath = modelPath;
 
-        // Calcula a nova resolução para o detector (menor, portanto mais rápido)
+        // Cria o serviço responsável pelas consultas ao banco.
+        _getStudentData = new GetStudentData(connectionString);
+
+        // Calcula a nova resolução para o detector.
         int scaledWidth = (int)(width * _scaleFactor);
         int scaledHeight = (int)(height * _scaleFactor);
-        
+
+        if (scaledWidth <= 0 || scaledHeight <= 0)
+        {
+            throw new ArgumentException(
+                "A largura e a altura precisam ser maiores que zero.");
+        }
+
         _embeddingService = new EmbeddingFaceService();
         _alignmentService = new FaceAlignmentService();
-        
-        // Instancia o detector YuNet com o tamanho reduzido
+
+        // Instancia o detector YuNet com o tamanho reduzido.
         _detector = FaceDetectorYN.Create(
             model: modelPath,
-            config: "",
+            config: string.Empty,
             inputSize: new Size(scaledWidth, scaledHeight),
-            scoreThreshold: 0.8f,   // Confiança mínima para considerar um rosto
-            nmsThreshold: 0.3f,     // Threshold para supressão não máxima
-            topK: 5000              // Quantidade máxima de rostos detectados
-        );
+            scoreThreshold: 0.8f,
+            nmsThreshold: 0.3f,
+            topK: 5000);
     }
-
     /// <summary>
     /// Detecta rostos de forma otimizada utilizando uma versão reduzida da imagem.
     /// Após a detecção, desenha as caixas delimitadoras e landmarks diretamente no frame original (alta resolução).
@@ -93,38 +140,16 @@ public class GetFaceService : IDisposable
             );
 
             // Detecta se a confidencia é maior que 90, se sim, manda para comparação
-            if (!isTested)
+            if (!_isTested)
             {
-                if (detectedFace.Confidence > 0.9f)
-                {
-                    string referenceFacePath = Path.Combine(
-                        AppContext.BaseDirectory,
-                        "public",
-                        "test",
-                        "face",
-                        "Face1.jpg"
-                    );
+                CompareFaces(frame, detectedFace);
+            }
 
-                    try
-                    {
-                        using var alignedReceivedFace = _alignmentService.Align(frame, detectedFace.Landmarks);
-                        var receivedEmbedding = _embeddingService.GetEmbedding(alignedReceivedFace);
-                        var referenceEmbedding = GetReferenceEmbedding(referenceFacePath);
-
-                        score = _embeddingService.CompareEmbeddings(receivedEmbedding, referenceEmbedding);
-                        isSamePerson = score >= 0.4f ? "sim" : "não";
-                        
-                        isTested = true;
-                        Console.WriteLine($"Similaridade: {score:F4}, mesma pessoa? {isSamePerson}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.Error.WriteLine($"Erro ao comparar rosto: {ex.Message}");
-                    }
-                }
+            if (_isSamePerson.Equals("não"))
+            {
+                Console.WriteLine("Erro aluno não encontrado");
             }
             
-            // Criar função depois
             
             // Desenhar os 5 landmarks (olho esq, olho dir, nariz, boca esq, boca dir)
             foreach (var landmark in detectedFace.Landmarks)
@@ -140,10 +165,10 @@ public class GetFaceService : IDisposable
             }
         }
             
-        if (isSamePerson != "")
+        if (_isSamePerson != "")
         {
-            isTested = false;
-            isSamePerson = "";
+            _isTested = false;
+            _isSamePerson = "";
         }
         return frame;
     }
@@ -324,6 +349,55 @@ public class GetFaceService : IDisposable
         _detector.Dispose();
         _disposed = true;
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Compara os rostos e entrega o real
+    /// </summary>
+    private async void CompareFaces(Mat frame, DetectedFace detectedFace)
+    {
+        if (detectedFace.Confidence > 0.9f)
+        {
+            int count = 1;
+            while (true)
+            {
+                byte[]? aluno = await _getStudentData.GetStudentPictureAsync(count);
+
+                if (aluno == null)
+                {
+                    _isSamePerson = "não";
+                    break;
+                }
+                else
+                {
+                    await File.WriteAllBytesAsync("student.jpg", aluno);
+                    
+                    try
+                    {
+                        using var alignedReceivedFace = _alignmentService.Align(frame, detectedFace.Landmarks);
+                        var receivedEmbedding = _embeddingService.GetEmbedding(alignedReceivedFace);
+                        var referenceEmbedding = GetReferenceEmbedding("student.jpg");
+
+                        _score = _embeddingService.CompareEmbeddings(receivedEmbedding, referenceEmbedding);
+                        if (_score >= 0.4f)
+                        {
+                            Console.WriteLine($"Similaridade: {_score:F4}, mesma pessoa? {_isSamePerson}");
+                            break;
+                        }
+
+                        _isTested = true;
+                        
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Erro ao comparar rosto: {ex.Message}");
+                    }
+                }
+
+
+            }
+        }
+        
     }
 }
 

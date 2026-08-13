@@ -1,11 +1,10 @@
+using Dapper;
 using FaceTec.Util.dataModel;
+using Microsoft.Data.SqlClient;
 
 namespace FaceTec.Services;
 
-using Dapper;
-using Microsoft.Data.SqlClient;
-
-public class GetStudentData
+public sealed class GetStudentData
 {
     private readonly string _connectionString;
 
@@ -14,46 +13,48 @@ public class GetStudentData
         _connectionString = connectionString;
     }
 
-    public async Task<StudentModel?> GetStudentDataById(
+    public async Task<StudentModel?> GetStudentDataByIdAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
         const string sql = """
                            SELECT
-                                id,
-                                nome,
-                                curso,
-                                periodo,
-                                instituicao
+                               id,
+                               nome,
+                               curso,
+                               periodo,
+                               instituicao
                            FROM aluno
-                           WHERE id = @id;
+                           WHERE id = @Id;
                            """;
-        await using var conexao = new SqlConnection(_connectionString);
+
+        await using var conexao =
+            new SqlConnection(_connectionString);
 
         return await conexao.QuerySingleOrDefaultAsync<StudentModel>(
             new CommandDefinition(
-                sql,
-                new { id = id },
+                commandText: sql,
+                parameters: new { Id = id },
                 cancellationToken: cancellationToken));
     }
 
-    public async Task<byte[]?> GetStudentPicture(
+    public async Task<byte[]?> GetStudentPictureAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
         const string sql = """
                            SELECT foto_perfil
                            FROM aluno
-                           WHERE id = @id;
+                           WHERE id = @Id;
                            """;
 
-        await using var conexao = new SqlConnection(_connectionString);
+        await using var conexao =
+            new SqlConnection(_connectionString);
 
-        return await conexao.ExecuteScalarAsync<byte[]>(
+        return await conexao.ExecuteScalarAsync<byte[]?>(
             new CommandDefinition(
-                sql,
-                new { id = id },
+                commandText: sql,
+                parameters: new { Id = id },
                 cancellationToken: cancellationToken));
     }
-    
 }
