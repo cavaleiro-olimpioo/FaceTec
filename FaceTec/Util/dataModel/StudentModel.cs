@@ -1,6 +1,6 @@
-namespace FaceTec.Repositories;
+namespace FaceTec.Util.dataModel;
 
-public class StudentModel
+public sealed class StudentModel
 {
     public int id { get; set; }
     public string nome { get; set; }
