@@ -7,5 +7,4 @@ public sealed class StudentModel
     public string curso { get; set; }
     public string periodo { get; set; }
     public string instituicao { get; set; }
-    public byte[] foto_perfil { get; set; }
 }
