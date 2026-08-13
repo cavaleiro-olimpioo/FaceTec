@@ -38,6 +38,24 @@ bool showWindow = ShouldShowWindow();
 // 3. Inicializa o serviço de detecção de rostos (já otimizado internamente)
 using var faceService = new GetFaceService(modelPath, width, height, connectionString);
 
+// ---- NOVO: assina o evento de reconhecimento UMA ÚNICA VEZ, aqui fora do loop ----
+// (assinar dentro do loop de frames criaria um handler novo a cada frame processado)
+// Ubuntu: Console.Beep() não existe (lança PlatformNotSupportedException). Usamos o ffplay,
+// que já está no PATH porque o RTSP também depende do ffmpeg, pra tocar um tom curto.
+// Isso só produz som se a máquina tiver saída de áudio real (PulseAudio/ALSA ativo);
+// em servidor headless sem placa de som, nenhum comando resolve — é limite de hardware.
+faceService.OnRecognized += _ =>
+{
+    var beep = new ProcessStartInfo
+    {
+        FileName = "ffplay",
+        Arguments = "-nodisp -autoexit -f lavfi -i \"sine=frequency=1000:duration=0.2\" -loglevel quiet",
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+    Process.Start(beep);
+};
+
 // 4. Configura o processo do FFmpeg para capturar o RTSP
 var psi = new ProcessStartInfo
 {
@@ -87,9 +105,9 @@ var readTask = Task.Run(() =>
         // Envia o frame recém-lido para a thread principal processar
         lock (bufferLock)
         {
-            if (sharedBuffer == null) 
+            if (sharedBuffer == null)
                 sharedBuffer = new byte[frameSize];
-            
+
             // Sobrescreve o buffer compartilhado sempre com o frame mais recente
             Buffer.BlockCopy(localBuffer, 0, sharedBuffer, 0, frameSize);
         }
@@ -136,8 +154,31 @@ while (isRunning)
         // Encontra rostos e desenha no próprio frame (Otimizado com Downscale internamente)
         var processed = faceService.DrawFaces(frame);
 
+        // ---- NOVO: overlay "Bem vindo, Nome" + foto, centralizado no topo ----
+        // Entra ANTES do crop pro displayRect: como o crop é simétrico (mesma margem
+        // dos dois lados), o texto continua centralizado depois de cortado.
+        if (faceService.IsRecognitionActive && faceService.RecognizedName is { } name)
+        {
+            string firstName = name.Split(' ')[0];
+            string text = $"Bem vindo, {firstName}";
+            var textSize = Cv2.GetTextSize(text, HersheyFonts.HersheySimplex, 0.9, 2, out _);
+            int textX = (processed.Width - textSize.Width) / 2;
+
+            if (faceService.RecognizedPhoto is { } photo)
+            {
+                using var thumb = new Mat();
+                Cv2.Resize(photo, thumb, new Size(80, 80));
+                var photoRect = new Rect((processed.Width - 80) / 2, 10, 80, 80);
+                thumb.CopyTo(new Mat(processed, photoRect));
+            }
+
+            Cv2.PutText(processed, text, new Point(textX, 110),
+                HersheyFonts.HersheySimplex, 0.9, Scalar.Lime, 2, LineTypes.AntiAlias);
+        }
+        // ---- fim do bloco novo ----
+
         using var displayFrame = new Mat(processed, displayRect);
-        
+
         // Exibe a janela
         if (showWindow)
             Cv2.ImShow("Câmera", displayFrame);
