@@ -35,6 +35,7 @@ public sealed class GetFaceService : IDisposable
     private string _isSamePerson = string.Empty;
     private float _score;
 
+    private DateTime _nextVerification;
 
     /// <summary>
     /// Construtor do serviço de detecção de faces.
@@ -140,13 +141,18 @@ public sealed class GetFaceService : IDisposable
             {
                 if (!_isComparing)
                 {
-                    CompareFaces(frame, detectedFace);
+                    if (DateTime.Now >= _nextVerification)
+                    {
+                        CompareFaces(frame, detectedFace);
+                    }
+                    
                 }
             }
             
             if (_isSamePerson.Equals("não"))
             {
                 Console.WriteLine("Erro aluno não encontrado");
+                _nextVerification = DateTime.Now.AddSeconds(5);
             }
 
 
@@ -372,25 +378,18 @@ public sealed class GetFaceService : IDisposable
             int count = 1;
             while (true)
             {
-                Console.WriteLine($"Antes do GetStudentPictureAsync: {count}");
+                
 
                 byte[]? aluno = await _getStudentData.GetStudentPictureAsync(count);
-
                 
-                Console.WriteLine(
-                    aluno == null
-                        ? "GetStudentPictureAsync RETORNOU NULL"
-                        : $"GetStudentPictureAsync RETORNOU {aluno.Length} BYTES");
                 
                 if (aluno == null)
                 {
-                    Console.WriteLine("Detectou aluno null");
                     _isSamePerson = "não";
                     break;
                 }
                 else
                 {
-                    Console.WriteLine("Se chegou aqui pq não ta funcionando kkkkkk");
                     await File.WriteAllBytesAsync("student.jpg", aluno);
                     
                     try
@@ -404,6 +403,7 @@ public sealed class GetFaceService : IDisposable
                         {
                             StudentModel? DataAluno = await _getStudentData.GetStudentDataByIdAsync(count);
                             Console.WriteLine($"Bem vindo {DataAluno.nome}");
+                            _nextVerification = DateTime.Now.AddSeconds(5);
                             _isSamePerson = "sim";
                             break;
                         }

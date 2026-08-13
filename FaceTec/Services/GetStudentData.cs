@@ -31,14 +31,13 @@ public sealed class GetStudentData
         await using var conexao =
             new NpgsqlConnection(_connectionString);
 
-        Console.WriteLine(
-            $"[DB] Buscando dados do aluno {id}...");
+        
 
         try
         {
             await conexao.OpenAsync(cancellationToken);
 
-            Console.WriteLine("[DB] PostgreSQL conectado!");
+            
 
             var aluno =
                 await conexao.QuerySingleOrDefaultAsync<StudentModel>(
@@ -46,17 +45,6 @@ public sealed class GetStudentData
                         commandText: sql,
                         parameters: new { Id = id },
                         cancellationToken: cancellationToken));
-
-            if (aluno == null)
-            {
-                Console.WriteLine(
-                    $"[DB] Aluno {id} não encontrado.");
-            }
-            else
-            {
-                Console.WriteLine(
-                    $"[DB] Aluno {id}: {aluno.nome}");
-            }
 
             return aluno;
         }
@@ -88,36 +76,20 @@ public sealed class GetStudentData
                            WHERE id = @Id;
                            """;
 
-        Console.WriteLine(
-            $"[DB] Buscando foto do aluno {id}...");
-
         await using var conexao =
             new NpgsqlConnection(_connectionString);
 
         try
         {
-            Console.WriteLine("[DB] Abrindo conexão PostgreSQL...");
+            
 
             await conexao.OpenAsync(cancellationToken);
-
-            Console.WriteLine(
-                "[DB] CONEXÃO POSTGRESQL ABERTA!");
-
-            Console.WriteLine(
-                "[DB] Executando SELECT da foto...");
-
             var resultado =
                 await conexao.ExecuteScalarAsync<byte[]?>(
                     new CommandDefinition(
                         commandText: sql,
                         parameters: new { Id = id },
                         cancellationToken: cancellationToken));
-
-            Console.WriteLine(
-                resultado == null
-                    ? "[DB] Foto NULL"
-                    : $"[DB] Foto recebida: {resultado.Length} bytes");
-
             return resultado;
         }
         catch (OperationCanceledException)
