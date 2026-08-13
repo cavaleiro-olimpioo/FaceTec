@@ -31,14 +31,10 @@ public sealed class GetFaceService : IDisposable
 
     private bool _disposed;
     private bool _isTested;
+    private bool _isComparing;
     private string _isSamePerson = string.Empty;
     private float _score;
-    string connectionString =
-        "Server=localhost,1433;" +
-        "Database=facetec_test;" +
-        "User Id=admin;" +
-        "Password=admin123;" +
-        "TrustServerCertificate=True;";
+
 
     /// <summary>
     /// Construtor do serviço de detecção de faces.
@@ -142,8 +138,17 @@ public sealed class GetFaceService : IDisposable
             // Detecta se a confidencia é maior que 90, se sim, manda para comparação
             if (!_isTested)
             {
-                CompareFaces(frame, detectedFace);
+                if (!_isComparing)
+                {
+                    CompareFaces(frame, detectedFace);
+                }
             }
+            
+            if (_isSamePerson.Equals("não"))
+            {
+                Console.WriteLine("Erro aluno não encontrado");
+            }
+
 
             if (_isSamePerson != "")
             {
@@ -151,10 +156,7 @@ public sealed class GetFaceService : IDisposable
                 _isTested = false;
             }
 
-            if (_isSamePerson.Equals("não"))
-            {
-                Console.WriteLine("Erro aluno não encontrado");
-            }
+            
             
             
             // Desenhar os 5 landmarks (olho esq, olho dir, nariz, boca esq, boca dir)
@@ -171,11 +173,7 @@ public sealed class GetFaceService : IDisposable
             }
         }
             
-        if (_isSamePerson != "")
-        {
-            _isTested = false;
-            _isSamePerson = "";
-        }
+        
         return frame;
     }
 
@@ -364,18 +362,33 @@ public sealed class GetFaceService : IDisposable
     {
         if (detectedFace.Confidence > 0.9f)
         {
+            if (_isComparing)
+                return;
+            
+            _isComparing = true;
+            
             int count = 1;
             while (true)
             {
+                Console.WriteLine($"Antes do GetStudentPictureAsync: {count}");
+
                 byte[]? aluno = await _getStudentData.GetStudentPictureAsync(count);
 
+                
+                Console.WriteLine(
+                    aluno == null
+                        ? "GetStudentPictureAsync RETORNOU NULL"
+                        : $"GetStudentPictureAsync RETORNOU {aluno.Length} BYTES");
+                
                 if (aluno == null)
                 {
+                    Console.WriteLine("Detectou aluno null");
                     _isSamePerson = "não";
                     break;
                 }
                 else
                 {
+                    Console.WriteLine("Se chegou aqui pq não ta funcionando kkkkkk");
                     await File.WriteAllBytesAsync("student.jpg", aluno);
                     
                     try
@@ -393,15 +406,24 @@ public sealed class GetFaceService : IDisposable
                             break;
                         }
 
+                        count++;
+
                         _isTested = true;
                         
                     }
                     catch (Exception ex)
                     {
                         Console.Error.WriteLine($"Erro ao comparar rosto: {ex.Message}");
+                        
+                        count++;
                     }
+                    finally
+                    {
+                        _isComparing = false;
+                    }
+                    
                 }
-
+                
 
             }
         }

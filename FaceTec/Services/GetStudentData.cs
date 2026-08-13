@@ -1,6 +1,6 @@
 using Dapper;
 using FaceTec.Util.dataModel;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace FaceTec.Services;
 
@@ -29,13 +29,53 @@ public sealed class GetStudentData
                            """;
 
         await using var conexao =
-            new SqlConnection(_connectionString);
+            new NpgsqlConnection(_connectionString);
 
-        return await conexao.QuerySingleOrDefaultAsync<StudentModel>(
-            new CommandDefinition(
-                commandText: sql,
-                parameters: new { Id = id },
-                cancellationToken: cancellationToken));
+        Console.WriteLine(
+            $"[DB] Buscando dados do aluno {id}...");
+
+        try
+        {
+            await conexao.OpenAsync(cancellationToken);
+
+            Console.WriteLine("[DB] PostgreSQL conectado!");
+
+            var aluno =
+                await conexao.QuerySingleOrDefaultAsync<StudentModel>(
+                    new CommandDefinition(
+                        commandText: sql,
+                        parameters: new { Id = id },
+                        cancellationToken: cancellationToken));
+
+            if (aluno == null)
+            {
+                Console.WriteLine(
+                    $"[DB] Aluno {id} não encontrado.");
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"[DB] Aluno {id}: {aluno.nome}");
+            }
+
+            return aluno;
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine(
+                "[DB] Operação cancelada.");
+
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[DB] Erro ao buscar aluno {id}:");
+
+            Console.Error.WriteLine(ex);
+
+            throw;
+        }
     }
 
     public async Task<byte[]?> GetStudentPictureAsync(
@@ -48,13 +88,53 @@ public sealed class GetStudentData
                            WHERE id = @Id;
                            """;
 
-        await using var conexao =
-            new SqlConnection(_connectionString);
+        Console.WriteLine(
+            $"[DB] Buscando foto do aluno {id}...");
 
-        return await conexao.ExecuteScalarAsync<byte[]?>(
-            new CommandDefinition(
-                commandText: sql,
-                parameters: new { Id = id },
-                cancellationToken: cancellationToken));
+        await using var conexao =
+            new NpgsqlConnection(_connectionString);
+
+        try
+        {
+            Console.WriteLine("[DB] Abrindo conexão PostgreSQL...");
+
+            await conexao.OpenAsync(cancellationToken);
+
+            Console.WriteLine(
+                "[DB] CONEXÃO POSTGRESQL ABERTA!");
+
+            Console.WriteLine(
+                "[DB] Executando SELECT da foto...");
+
+            var resultado =
+                await conexao.ExecuteScalarAsync<byte[]?>(
+                    new CommandDefinition(
+                        commandText: sql,
+                        parameters: new { Id = id },
+                        cancellationToken: cancellationToken));
+
+            Console.WriteLine(
+                resultado == null
+                    ? "[DB] Foto NULL"
+                    : $"[DB] Foto recebida: {resultado.Length} bytes");
+
+            return resultado;
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine(
+                "[DB] Operação cancelada.");
+
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"[DB] Erro ao buscar foto do aluno {id}:");
+
+            Console.Error.WriteLine(ex);
+
+            throw;
+        }
     }
 }

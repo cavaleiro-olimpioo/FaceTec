@@ -18,6 +18,14 @@ int width = 1354;
 int height = 780;
 int frameSize = width * height * 3; // 3 canais (BGR)
 
+// Dados da conexão com database
+string connectionString =
+    "Server=localhost,1433;" +
+    "Database=facetec_test;" +
+    "User Id=admin;" +
+    "Password=admin123;" +
+    "TrustServerCertificate=True;";
+
 // Caminho para o modelo YuNet atualizado
 string modelPath = Path.Combine(AppContext.BaseDirectory, "face_detection_yunet_2023mar.onnx");
 if (!File.Exists(modelPath))
@@ -28,7 +36,7 @@ if (!File.Exists(modelPath))
 bool showWindow = ShouldShowWindow();
 
 // 3. Inicializa o serviço de detecção de rostos (já otimizado internamente)
-using var faceService = new GetFaceService(modelPath, width, height);
+using var faceService = new GetFaceService(modelPath, width, height, connectionString);
 
 // 4. Configura o processo do FFmpeg para capturar o RTSP
 var psi = new ProcessStartInfo
@@ -46,8 +54,8 @@ using var process = Process.Start(psi)
 
 process.ErrorDataReceived += (_, e) =>
 {
-    if (!string.IsNullOrWhiteSpace(e.Data))
-        Console.Error.WriteLine($"ffmpeg: {RedactSensitiveUrls(e.Data)}");
+    // if (!string.IsNullOrWhiteSpace(e.Data))
+        // Console.Error.WriteLine($"ffmpeg: {RedactSensitiveUrls(e.Data)}");
 };
 process.BeginErrorReadLine();
 var stdout = process.StandardOutput.BaseStream;
