@@ -145,6 +145,12 @@ public sealed class GetFaceService : IDisposable
                 CompareFaces(frame, detectedFace);
             }
 
+            if (_isSamePerson != "")
+            {
+                _isSamePerson = "";
+                _isTested = false;
+            }
+
             if (_isSamePerson.Equals("não"))
             {
                 Console.WriteLine("Erro aluno não encontrado");
@@ -381,7 +387,9 @@ public sealed class GetFaceService : IDisposable
                         _score = _embeddingService.CompareEmbeddings(receivedEmbedding, referenceEmbedding);
                         if (_score >= 0.4f)
                         {
-                            Console.WriteLine($"Similaridade: {_score:F4}, mesma pessoa? {_isSamePerson}");
+                            StudentModel? DataAluno = await _getStudentData.GetStudentDataByIdAsync(count);
+                            Console.WriteLine($"Bem vindo {DataAluno.nome}");
+                            _isSamePerson = "sim";
                             break;
                         }
 
