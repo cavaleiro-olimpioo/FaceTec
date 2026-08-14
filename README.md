@@ -27,7 +27,7 @@ A linguagem principal do projeto é **C# (.NET)**.
 
 1. Clone o repositório:
    ```bash
-   git clone <url-do-repositorio>
+   git clone https://github.com/cavaleiro-olimpioo/FaceTec.git
    ```
 
 2. Crie um arquivo `.env` na raiz do projeto com a URL RTSP da câmera:
