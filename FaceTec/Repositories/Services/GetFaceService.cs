@@ -16,7 +16,7 @@ using System.Linq;
 
 public sealed class GetFaceService : IDisposable
 {
-    private readonly GetStudentData _getStudentData;
+    private readonly GetStudentData? _getStudentData;
     private readonly bool _useLocalTestPhotos;
     private readonly string? _testPhotosDirectory;
 
@@ -86,7 +86,7 @@ public sealed class GetFaceService : IDisposable
                 nameof(modelPath));
         }
 
-        if (string.IsNullOrWhiteSpace(connectionString))
+        if (!useLocalTestPhotos && string.IsNullOrWhiteSpace(connectionString))
         {
             throw new ArgumentException(
                 "A connection string não pode ser vazia.",
@@ -109,7 +109,7 @@ public sealed class GetFaceService : IDisposable
                 Path.Combine(_testPhotosDirectory!, "1.jpg"));
 
         // Cria o serviço responsável pelas consultas ao banco.
-        _getStudentData = new GetStudentData(connectionString);
+        _getStudentData = useLocalTestPhotos ? null : new GetStudentData(connectionString);
 
         // Calcula a nova resolução para o detector.
         int scaledWidth = (int)(width * _scaleFactor);
@@ -382,7 +382,7 @@ public sealed class GetFaceService : IDisposable
             {
                 byte[]? aluno = _useLocalTestPhotos
                     ? ReadLocalTestPhoto(count)
-                    : await _getStudentData.GetStudentPictureAsync(count);
+                    : await _getStudentData!.GetStudentPictureAsync(count);
 
                 if (aluno == null)
                 {
@@ -430,15 +430,31 @@ public sealed class GetFaceService : IDisposable
                         _score = _embeddingService.CompareEmbeddings(receivedEmbedding, referenceEmbedding);
                         if (_score >= 0.4f)
                         {
-                            StudentModel? dataAluno = await _getStudentData.GetStudentDataByIdAsync(count);
+                            string recognizedName;
+                            if (_useLocalTestPhotos)
+                            {
+                                recognizedName = $"Teste {count}";
+                            }
+                            else
+                            {
+                                StudentModel? dataAluno = await _getStudentData!.GetStudentDataByIdAsync(count);
+                                if (dataAluno is null)
+                                {
+                                    Console.Error.WriteLine($"Dados do aluno {count} não encontrados, pulando.");
+                                    count++;
+                                    continue;
+                                }
+
+                                recognizedName = dataAluno.nome;
+                            }
 
                             // ---- Mini interface: guarda estado de reconhecimento pro Program.cs desenhar/tocar o beep ----
                             RecognizedPhoto?.Dispose();
                             RecognizedPhoto = Cv2.ImDecode(aluno, ImreadModes.Color); // decodifica da memória, sem I/O extra
-                            RecognizedName = dataAluno.nome;
+                            RecognizedName = recognizedName;
                             _recognizedUntil = DateTime.Now.AddSeconds(5);
 
-                            OnRecognized?.Invoke(dataAluno.nome);
+                            OnRecognized?.Invoke(recognizedName);
 
                             _nextVerification = DateTime.Now.AddSeconds(5);
                             _isSamePerson = "sim";

@@ -43,7 +43,7 @@ A linguagem principal do projeto é **C# (.NET)**.
    ```
    Coloque as imagens em `FaceTec/facesTest`, nomeadas pelo ID do aluno em sequência, por exemplo `1.jpg`, `2.png` ou `face1.jpeg`, `face2.jpeg`. São aceitos arquivos JPG, JPEG, PNG, BMP e WEBP. A pasta pode ser alterada com `FACETEC_TEST_PHOTOS_PATH`; sem essa variável, o programa procura `facesTest` junto ao projeto. O modo padrão é `false`, que mantém a leitura das fotos no banco.
 
-   O nome e os dados do aluno reconhecido continuam sendo consultados no banco; esse modo substitui somente a origem das fotos.
+   No modo local, nenhum dado do aluno é consultado no banco; o overlay identifica as imagens como `Teste <ID>`. Fora desse modo, fotos e dados continuam sendo lidos do banco.
 
 4. Para usar uma câmera RTSP, selecione a opção `2` e configure a URL no arquivo `.env`:
    ```
