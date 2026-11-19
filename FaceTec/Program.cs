@@ -1,22 +1,23 @@
 using OpenCvSharp;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using DotNetEnv;
 using FaceTec.Services;
 
 // 1. Carrega as variáveis de ambiente do arquivo .env
-string envPath = Path.GetFullPath(
-    Path.Combine(AppContext.BaseDirectory, "../../../../.env/.env")
-);
-Env.Load(envPath);
-
-string rtsp_path = Environment.GetEnvironmentVariable("url_rtsp")
-                   ?? throw new Exception("Variável url_rtsp não encontrada no .env");
+LoadEnvironmentFile();
 
 // 2. Configurações de resolução do vídeo
 int width = 1354;
 int height = 780;
 int frameSize = width * height * 3; // 3 canais (BGR)
+
+int source = ReadVideoSource();
+string? rtspPath = source == 2
+        ? Environment.GetEnvironmentVariable("url_rtsp")
+            ?? throw new Exception("Variável url_rtsp não encontrada no .env")
+        : null;
 
 // Dados da conexão com database
 string connectionString =
@@ -34,9 +35,17 @@ if (!File.Exists(modelPath))
 // FACETEC_SHOW_WINDOW=true/false força o comportamento.
 // Sem configuração explícita, abre janela quando houver sessão gráfica disponível.
 bool showWindow = ShouldShowWindow();
+bool testMode = ReadTestMode();
+string? testPhotosDirectory = testMode ? ResolveTestPhotosDirectory() : null;
 
 // 3. Inicializa o serviço de detecção de rostos (já otimizado internamente)
-using var faceService = new GetFaceService(modelPath, width, height, connectionString);
+using var faceService = new GetFaceService(
+    modelPath,
+    width,
+    height,
+    connectionString,
+    testMode,
+    testPhotosDirectory);
 
 // ---- NOVO: assina o evento de reconhecimento UMA ÚNICA VEZ, aqui fora do loop ----
 // (assinar dentro do loop de frames criaria um handler novo a cada frame processado)
@@ -56,27 +65,43 @@ faceService.OnRecognized += _ =>
     Process.Start(beep);
 };
 
-// 4. Configura o processo do FFmpeg para capturar o RTSP
-var psi = new ProcessStartInfo
-{
-    FileName = "ffmpeg",
-    Arguments = $"-rtsp_transport tcp -i \"{rtsp_path}\" -vf scale={width}:{height} -f rawvideo -pix_fmt bgr24 -",
-    RedirectStandardOutput = true,
-    RedirectStandardError = true,
-    UseShellExecute = false,
-    CreateNoWindow = true
-};
+// 4. Inicializa a fonte de vídeo escolhida no terminal.
+Process? process = null;
+VideoCapture? webcam = null;
+Stream? stdout = null;
 
-using var process = Process.Start(psi)
-                    ?? throw new Exception("Não foi possível iniciar o ffmpeg");
-
-process.ErrorDataReceived += (_, e) =>
+if (source == 2)
 {
-    // if (!string.IsNullOrWhiteSpace(e.Data))
-        // Console.Error.WriteLine($"ffmpeg: {RedactSensitiveUrls(e.Data)}");
-};
-process.BeginErrorReadLine();
-var stdout = process.StandardOutput.BaseStream;
+    var psi = new ProcessStartInfo
+    {
+        FileName = "ffmpeg",
+        Arguments = $"-rtsp_transport tcp -i \"{rtspPath}\" -vf scale={width}:{height} -f rawvideo -pix_fmt bgr24 -",
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
+    process = Process.Start(psi)
+              ?? throw new Exception("Não foi possível iniciar o ffmpeg");
+    process.ErrorDataReceived += (_, e) =>
+    {
+        // if (!string.IsNullOrWhiteSpace(e.Data))
+        //     Console.Error.WriteLine($"ffmpeg: {RedactSensitiveUrls(e.Data)}");
+    };
+    process.BeginErrorReadLine();
+    stdout = process.StandardOutput.BaseStream;
+}
+else
+{
+    int webcamIndex = ReadWebcamIndex();
+    webcam = new VideoCapture(webcamIndex);
+    if (!webcam.IsOpened())
+        throw new Exception($"Não foi possível abrir a webcam no índice {webcamIndex}. Verifique se ela está conectada e não está sendo usada por outro aplicativo.");
+
+    webcam.Set(VideoCaptureProperties.FrameWidth, width);
+    webcam.Set(VideoCaptureProperties.FrameHeight, height);
+}
 
 // Variáveis para comunicação entre a thread de leitura e a thread principal
 byte[]? sharedBuffer = null;
@@ -88,19 +113,39 @@ bool isRunning = true;
 var readTask = Task.Run(() =>
 {
     byte[] localBuffer = new byte[frameSize];
+    using var webcamFrame = new Mat();
+    using var resizedFrame = new Mat();
+
     while (isRunning)
     {
-        int byteRead = 0;
-        // Lê os bytes até preencher um frame inteiro
-        while (byteRead < frameSize)
+        if (source == 1)
         {
-            int read = stdout.Read(localBuffer, byteRead, frameSize - byteRead);
-            if (read <= 0) break;
-            byteRead += read;
-        }
+            if (!webcam!.Read(webcamFrame) || webcamFrame.Empty())
+                break;
 
-        if (byteRead < frameSize)
-            break; // Fim do stream ou erro
+            Mat frameToCopy = webcamFrame;
+            if (webcamFrame.Width != width || webcamFrame.Height != height)
+            {
+                Cv2.Resize(webcamFrame, resizedFrame, new Size(width, height));
+                frameToCopy = resizedFrame;
+            }
+
+            Marshal.Copy(frameToCopy.Data, localBuffer, 0, frameSize);
+        }
+        else
+        {
+            int byteRead = 0;
+            // Lê os bytes até preencher um frame inteiro.
+            while (byteRead < frameSize)
+            {
+                int read = stdout!.Read(localBuffer, byteRead, frameSize - byteRead);
+                if (read <= 0) break;
+                byteRead += read;
+            }
+
+            if (byteRead < frameSize)
+                break; // Fim do stream ou erro.
+        }
 
         // Envia o frame recém-lido para a thread principal processar
         lock (bufferLock)
@@ -193,9 +238,10 @@ while (isRunning)
 }
 
 // 7. Encerramento seguro
-if (!process.HasExited)
+if (process is not null && !process.HasExited)
     process.Kill();
 readTask.Wait(1000); // Aguarda a thread de leitura fechar
+webcam?.Release();
 if (showWindow)
     Cv2.DestroyAllWindows();
 
@@ -207,6 +253,89 @@ static bool ShouldShowWindow()
 
     return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY"))
            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+}
+
+static void LoadEnvironmentFile()
+{
+    string legacyEnvPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "../../../../.env/.env"));
+    if (File.Exists(legacyEnvPath))
+    {
+        Env.Load(legacyEnvPath);
+        return;
+    }
+
+    for (DirectoryInfo? directory = new(AppContext.BaseDirectory);
+         directory is not null;
+         directory = directory.Parent)
+    {
+        string envPath = Path.Combine(directory.FullName, ".env");
+        if (File.Exists(envPath))
+        {
+            Env.Load(envPath);
+            return;
+        }
+    }
+}
+
+static bool ReadTestMode()
+{
+    string? value = Environment.GetEnvironmentVariable("FACETEC_TEST_MODE");
+    if (string.IsNullOrWhiteSpace(value))
+        return false;
+
+    if (bool.TryParse(value, out bool enabled))
+        return enabled;
+
+    throw new InvalidOperationException("FACETEC_TEST_MODE deve ser true ou false.");
+}
+
+static string ResolveTestPhotosDirectory()
+{
+    string? configuredPath = Environment.GetEnvironmentVariable("FACETEC_TEST_PHOTOS_PATH");
+    if (!string.IsNullOrWhiteSpace(configuredPath))
+        return Path.GetFullPath(Environment.ExpandEnvironmentVariables(configuredPath));
+
+    for (DirectoryInfo? directory = new(AppContext.BaseDirectory);
+         directory is not null;
+         directory = directory.Parent)
+    {
+        string candidate = Path.Combine(directory.FullName, "facesTest");
+        if (Directory.Exists(candidate))
+            return candidate;
+    }
+
+    throw new DirectoryNotFoundException(
+        "Pasta de fotos de teste não encontrada. Configure FACETEC_TEST_PHOTOS_PATH.");
+}
+
+static int ReadVideoSource()
+{
+    while (true)
+    {
+        Console.WriteLine("Escolha a fonte de vídeo:");
+        Console.WriteLine("1 - Webcam do notebook");
+        Console.WriteLine("2 - RTSP");
+        Console.Write("Opção: ");
+
+        string? option = Console.ReadLine()?.Trim();
+        if (option is "1" or "2")
+            return int.Parse(option);
+
+        Console.WriteLine("Opção inválida. Digite 1 ou 2.\n");
+    }
+}
+
+static int ReadWebcamIndex()
+{
+    string? configuredIndex = Environment.GetEnvironmentVariable("FACETEC_CAMERA_INDEX");
+    if (string.IsNullOrWhiteSpace(configuredIndex))
+        return 0;
+
+    if (int.TryParse(configuredIndex, out int webcamIndex) && webcamIndex >= 0)
+        return webcamIndex;
+
+    throw new InvalidOperationException("FACETEC_CAMERA_INDEX deve ser um inteiro maior ou igual a zero.");
 }
 
 static string RedactSensitiveUrls(string message)

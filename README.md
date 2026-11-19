@@ -11,6 +11,7 @@ A linguagem principal do projeto é **C# (.NET)**.
 ## Funcionalidades
 
 ### Implementadas
+- Captura de vídeo via webcam do notebook (dispositivo padrão ou índice configurável)
 - Captura de vídeo via RTSP (câmeras estilo Dahua/Intelbras)
 - Detecção facial (YuNet) + alinhamento (ArcFace 112x112)
 - Geração de embedding facial via modelo ONNX
@@ -30,12 +31,26 @@ A linguagem principal do projeto é **C# (.NET)**.
    git clone https://github.com/cavaleiro-olimpioo/FaceTec.git
    ```
 
-2. Crie um arquivo `.env` na raiz do projeto com a URL RTSP da câmera:
+2. Para usar a webcam do notebook, selecione a opção `1` ao iniciar. Por padrão, o programa abre o dispositivo de índice `0`. Se houver mais de uma câmera, configure outro índice antes de executar:
+   ```bash
+   FACETEC_CAMERA_INDEX=1 dotnet run --project FaceTec
+   ```
+   No PowerShell, use `$env:FACETEC_CAMERA_INDEX="1"` antes de executar `dotnet run --project FaceTec`.
+
+3. Para testar com fotos locais em vez das fotos armazenadas no banco, configure no arquivo `.env`:
+   ```env
+   FACETEC_TEST_MODE=true
+   ```
+   Coloque as imagens em `FaceTec/facesTest`, nomeadas pelo ID do aluno em sequência, por exemplo `1.jpg`, `2.png`. São aceitos arquivos JPG, JPEG, PNG, BMP e WEBP. A pasta pode ser alterada com `FACETEC_TEST_PHOTOS_PATH`; sem essa variável, o programa procura `facesTest` junto ao projeto. O modo padrão é `false`, que mantém a leitura das fotos no banco.
+
+   O nome e os dados do aluno reconhecido continuam sendo consultados no banco; esse modo substitui somente a origem das fotos.
+
+4. Para usar uma câmera RTSP, selecione a opção `2` e configure a URL no arquivo `.env`:
    ```
    url_rtsp="rtsp://usuario:senha@192.168.0.1:554/cam/realmonitor?channel=1&subtype=0"
    ```
 
-3. Configure a conexão com o banco de dados em `Program.cs`:
+5. Configure a conexão com o banco de dados em `Program.cs`:
    ```csharp
    string connectionString =
        "Server=SEU_SERVIDOR,1433;" +
@@ -46,7 +61,7 @@ A linguagem principal do projeto é **C# (.NET)**.
    ```
 
 
-4. Execute o projeto normalmente pela IDE (Rider/Visual Studio) ou via `dotnet run`.
+6. Execute o projeto normalmente pela IDE (Rider/Visual Studio) ou via `dotnet run`.
 
 ## Stack
 

@@ -17,6 +17,11 @@ using System.Linq;
 public sealed class GetFaceService : IDisposable
 {
     private readonly GetStudentData _getStudentData;
+    private readonly bool _useLocalTestPhotos;
+    private readonly string? _testPhotosDirectory;
+
+    private static readonly string[] TestPhotoExtensions =
+        [".jpg", ".jpeg", ".png", ".bmp", ".webp"];
 
     private readonly FaceDetectorYN _detector;
     private readonly string _modelPath;
@@ -70,7 +75,9 @@ public sealed class GetFaceService : IDisposable
         string modelPath,
         int width,
         int height,
-        string connectionString)
+        string connectionString,
+        bool useLocalTestPhotos = false,
+        string? testPhotosDirectory = null)
     {
         if (string.IsNullOrWhiteSpace(modelPath))
         {
@@ -86,7 +93,20 @@ public sealed class GetFaceService : IDisposable
                 nameof(connectionString));
         }
 
+        if (useLocalTestPhotos && string.IsNullOrWhiteSpace(testPhotosDirectory))
+            throw new ArgumentException("A pasta de fotos de teste precisa ser informada.", nameof(testPhotosDirectory));
+
+        if (useLocalTestPhotos && !Directory.Exists(testPhotosDirectory))
+            throw new DirectoryNotFoundException($"Pasta de fotos de teste não encontrada: {testPhotosDirectory}");
+
         _modelPath = modelPath;
+        _useLocalTestPhotos = useLocalTestPhotos;
+        _testPhotosDirectory = testPhotosDirectory;
+
+        if (_useLocalTestPhotos && FindLocalTestPhotoPath(1) is null)
+            throw new FileNotFoundException(
+                "Modo de teste ativo, mas nenhuma foto para o ID 1 foi encontrada. Use nomes como 1.jpg, 2.jpg etc.",
+                Path.Combine(_testPhotosDirectory!, "1.jpg"));
 
         // Cria o serviço responsável pelas consultas ao banco.
         _getStudentData = new GetStudentData(connectionString);
@@ -360,7 +380,9 @@ public sealed class GetFaceService : IDisposable
             int count = 1;
             while (true)
             {
-                byte[]? aluno = await _getStudentData.GetStudentPictureAsync(count);
+                byte[]? aluno = _useLocalTestPhotos
+                    ? ReadLocalTestPhoto(count)
+                    : await _getStudentData.GetStudentPictureAsync(count);
 
                 if (aluno == null)
                 {
@@ -438,6 +460,24 @@ public sealed class GetFaceService : IDisposable
                 }
             }
         }
+    }
+
+    private byte[]? ReadLocalTestPhoto(int studentId)
+    {
+        string? photoPath = FindLocalTestPhotoPath(studentId);
+        return photoPath is null ? null : File.ReadAllBytes(photoPath);
+    }
+
+    private string? FindLocalTestPhotoPath(int studentId)
+    {
+        foreach (string extension in TestPhotoExtensions)
+        {
+            string path = Path.Combine(_testPhotosDirectory!, $"{studentId}{extension}");
+            if (File.Exists(path))
+                return path;
+        }
+
+        return null;
     }
 }
 
