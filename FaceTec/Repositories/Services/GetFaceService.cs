@@ -105,7 +105,7 @@ public sealed class GetFaceService : IDisposable
 
         if (_useLocalTestPhotos && FindLocalTestPhotoPath(1) is null)
             throw new FileNotFoundException(
-                "Modo de teste ativo, mas nenhuma foto para o ID 1 foi encontrada. Use nomes como 1.jpg, 2.jpg etc.",
+                "Modo de teste ativo, mas nenhuma foto para o ID 1 foi encontrada. Use nomes como 1.jpg ou face1.jpeg.",
                 Path.Combine(_testPhotosDirectory!, "1.jpg"));
 
         // Cria o serviço responsável pelas consultas ao banco.
@@ -472,9 +472,13 @@ public sealed class GetFaceService : IDisposable
     {
         foreach (string extension in TestPhotoExtensions)
         {
-            string path = Path.Combine(_testPhotosDirectory!, $"{studentId}{extension}");
-            if (File.Exists(path))
-                return path;
+            string[] fileNames = [$"{studentId}{extension}", $"face{studentId}{extension}"];
+            foreach (string fileName in fileNames)
+            {
+                string path = Path.Combine(_testPhotosDirectory!, fileName);
+                if (File.Exists(path))
+                    return path;
+            }
         }
 
         return null;
