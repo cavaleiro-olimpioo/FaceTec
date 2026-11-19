@@ -368,7 +368,7 @@ public sealed class GetFaceService : IDisposable
     /// </summary>
     private async void CompareFaces(Mat frame, DetectedFace detectedFace)
     {
-        if (detectedFace.Confidence > 0.9f)
+        if (detectedFace.Confidence >= 0.90f)
         {
             if (_isComparing)
                 return;
